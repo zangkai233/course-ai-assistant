@@ -2,7 +2,7 @@
 
 Source and configuration templates for the 500-student course chatbot discussed in the reference conversation. The target architecture uses React + TypeScript + Vite, FastAPI, async SQLAlchemy with Psycopg, PostgreSQL/pgvector, Redis, and an OpenAI-compatible LLM API.
 
-This folder contains source files only. No packages, environments, databases, Docker services, API credentials, or deployment have been configured, installed, or run. There are no real `.env` files. Runtime and capacity have not been tested.
+This repository contains the application source and a Compose stack for PostgreSQL, Redis, the backend, and the frontend. Local environment files and credentials are not tracked. A local burst-test result is recorded below; sustained capacity has not been measured.
 
 ## Project layout
 
@@ -94,7 +94,7 @@ Fill your own local environment files when you are ready:
 
 Backend settings are read from `.env` relative to the backend working directory. Python source requires Python 3.11 or newer. Vite 7 requires a supported Node version (20.19+ or 22.12+).
 
-The Compose file is a template for PostgreSQL/pgvector and Redis only. After filling your own backend environment, its variables are supplied with `docker compose --env-file backend/.env up -d`. The PostgreSQL initialization file creates the `vector` extension. The application creates its table definitions at startup. No services have been started by the file creation task.
+After filling your own backend environment, start the Compose stack with `docker compose --env-file backend/.env up -d --build`. The PostgreSQL initialization file creates the `vector` extension. The application creates its table definitions at startup.
 
 The optional `infra/nginx.conf.example` shows two backend instances and disables buffering for SSE. Supply your own addresses and deployment configuration. It is not active or included in Compose.
 
@@ -121,6 +121,27 @@ Example chat request body:
 
 SSE events are `meta` (conversation ID), `sources` (RAG excerpts), `token` (text), `done`, and `error`. The frontend uses a streaming `fetch` request to send the JSON body and student header. Aborted or failed responses are not saved as completed assistant messages.
 
+## Chat concurrency test
+
+The project-root `test.py` sends concurrent requests to the running backend. It counts a request as successful only after the SSE `done` event, and reports HTTP errors, stream errors, completion latency, first-token latency, and request throughput. Each request uses a distinct student ID so the per-student rate limit does not affect this capacity measurement.
+
+Start the Docker stack if it is stopped (from the project root):
+
+```sh
+docker compose --env-file backend/.env up -d --build
+```
+
+Then run a small check before increasing the load:
+
+```sh
+backend/.venv/bin/python test.py --requests 10 --concurrency 10
+backend/.venv/bin/python test.py --requests 500 --concurrency 500 --max-failure-rate 0.05 --max-p95-ms 30000
+```
+
+Adjust the thresholds to your actual service targets. The test calls the configured LLM provider once per successful chat request, which may incur usage charges. Running containers do not need to be restarted between tests. Rebuild after backend image or dependency changes. The frontend is not used by this API-level test.
+
+On October 4, 2026, a user-run local Docker test with `--requests 500 --concurrency 500` completed all 500 chats with no failures. It took 13.29 seconds, for 37.63 successful requests per second. Successful response latency was 6.90 seconds at P50 and 12.53 seconds at P95; first-token latency was 6.36 seconds at P50 and 12.00 seconds at P95. This was one burst using the script's short default prompt and a new student/conversation per request. It does not establish sustained throughput or the maximum supported number of active students.
+
 ## Course material ingestion
 
 After your own setup, run the ingestion module from the backend working directory:
@@ -135,4 +156,4 @@ Input is UTF-8 plain text. The script splits it into overlapping chunks, calls t
 
 Available backend code was copied from the reference conversation. The retrieved reference ends partway through the RAG service; the remaining RAG, routes, ingestion, and frontend templates were completed to follow its architecture and conventions. This scaffold includes the missing TypeScript project configuration and an embedding cache helper.
 
-Only file existence, content completeness, and empty secret placeholders were checked. No installation, startup, build, runtime troubleshooting, load testing, or deployment was performed.
+Use `test.py` against the deployment you intend to operate when measuring capacity for that environment.

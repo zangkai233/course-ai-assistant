@@ -18,6 +18,8 @@ class Settings(BaseSettings):
 
     # Redis
     redis_url: str
+    redis_max_connections: int = 100
+    redis_pool_wait_seconds: float = 15
 
     # Rate limit
     rate_limit_per_minute: int = 10

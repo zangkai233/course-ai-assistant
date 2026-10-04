@@ -6,6 +6,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from redis.exceptions import RedisError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -77,7 +78,14 @@ async def chat(payload: ChatRequest, request: Request, student_id: StudentID):
     message = payload.message.strip()
     if not message:
         raise HTTPException(status_code=422, detail="Message cannot be blank.")
-    await enforce_rate_limit(student_id)
+    try:
+        await enforce_rate_limit(student_id)
+    except RedisError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="The service is temporarily busy. Please try again shortly.",
+            headers={"Retry-After": "5"},
+        ) from exc
 
     # Close the database session before holding a streaming connection.
     async with SessionLocal() as session:
@@ -110,7 +118,14 @@ async def chat(payload: ChatRequest, request: Request, student_id: StudentID):
         ))
         await session.commit()
 
-    slot = await acquire_llm_slot()
+    try:
+        slot = await acquire_llm_slot()
+    except RedisError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="The service is temporarily busy. Please try again shortly.",
+            headers={"Retry-After": "5"},
+        ) from exc
     if slot is None:
         raise HTTPException(
             status_code=503,
