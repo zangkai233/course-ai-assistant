@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+
+sqlalchemy[asyncio]
+psycopg[binary]
+pgvector
+
+redis
+httpx
+
+pydantic-settings

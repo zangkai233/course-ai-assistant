@@ -1,0 +1,26 @@
+# Local environment files and credentials
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Frontend
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Local tools
+.DS_Store
+.idea/
+.vscode/
+*.log
+
+# Local course materials
+backend/materials/
